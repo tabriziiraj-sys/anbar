@@ -1,55 +1,52 @@
 @echo off
-chcp 65001 >nul 2>&1
-title انبارینو - سیستم مدیریت انبار و امور مالی
+title Anbarino - Warehouse Management System
 color 0A
 
 echo.
-echo ╔════════════════════════════════════════════════════════════╗
-echo ║                                                            ║
-echo ║              انبارینو - سیستم مدیریت انبار                 ║
-echo ║                                                            ║
-echo ╚════════════════════════════════════════════════════════════╝
+echo ========================================================
+echo        Anbarino - Warehouse Management System
+echo ========================================================
 echo.
 
-:: بررسی نصب بودن Node.js
+:: Check if Node.js is installed
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [خطا] Node.js نصب نیست!
+    echo [ERROR] Node.js is not installed!
     echo.
-    echo لطفاً Node.js را از آدرس زیر دانلود و نصب کنید:
+    echo Please download and install Node.js from:
     echo   https://nodejs.org/
     echo.
     pause
     exit /b 1
 )
 
-echo [1/3] بررسی پوشه build...
+echo [1/3] Checking build folder...
 if not exist "dist\index.html" (
-    echo       پوشه dist یافت نشد. در حال ساخت...
+    echo       dist folder not found. Building...
     echo.
     call npm run build
     if %errorlevel% neq 0 (
         echo.
-        echo [خطا] ساخت پروژه با مشکل مواجه شد!
+        echo [ERROR] Build failed!
         pause
         exit /b 1
     )
     echo.
-    echo [OK] پروژه با موفقیت ساخته شد.
+    echo [OK] Build completed successfully.
 ) else (
-    echo [OK] پوشه dist موجود است.
+    echo [OK] dist folder exists.
 )
 
 echo.
-echo [2/3] راه‌اندازی سرور روی پورت 3008...
+echo [2/3] Starting server on port 3008...
 echo.
-echo [3/3] باز کردن مرورگر...
+echo [3/3] Opening browser...
 echo.
 
-:: باز کردن مرورگر به‌صورت خودکار
+:: Open browser automatically
 start "" "http://localhost:3008"
 
-:: اجرای سرور
-node server.js
+:: Run server
+node server.cjs
 
 pause

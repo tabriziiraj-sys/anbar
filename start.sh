@@ -1,51 +1,49 @@
 #!/bin/bash
 
 echo ""
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                                                            ║"
-echo "║              انبارینو - سیستم مدیریت انبار                 ║"
-echo "║                                                            ║"
-echo "╚════════════════════════════════════════════════════════════╝"
+echo "========================================================"
+echo "       Anbarino - Warehouse Management System"
+echo "========================================================"
 echo ""
 
-# بررسی نصب بودن Node.js
+# Check if Node.js is installed
 if ! command -v node &> /dev/null; then
-    echo "[خطا] Node.js نصب نیست!"
+    echo "[ERROR] Node.js is not installed!"
     echo ""
-    echo "لطفاً Node.js را از آدرس زیر دانلود و نصب کنید:"
+    echo "Please download and install Node.js from:"
     echo "  https://nodejs.org/"
     echo ""
     exit 1
 fi
 
-echo "[1/3] بررسی پوشه build..."
+echo "[1/3] Checking build folder..."
 if [ ! -f "dist/index.html" ]; then
-    echo "      پوشه dist یافت نشد. در حال ساخت..."
+    echo "      dist folder not found. Building..."
     echo ""
     npm run build
     if [ $? -ne 0 ]; then
         echo ""
-        echo "[خطا] ساخت پروژه با مشکل مواجه شد!"
+        echo "[ERROR] Build failed!"
         exit 1
     fi
     echo ""
-    echo "[OK] پروژه با موفقیت ساخته شد."
+    echo "[OK] Build completed successfully."
 else
-    echo "[OK] پوشه dist موجود است."
+    echo "[OK] dist folder exists."
 fi
 
 echo ""
-echo "[2/3] راه‌اندازی سرور روی پورت 3008..."
+echo "[2/3] Starting server on port 3008..."
 echo ""
-echo "[3/3] باز کردن مرورگر..."
+echo "[3/3] Opening browser..."
 echo ""
 
-# باز کردن مرورگر به‌صورت خودکار (مک/لینوکس)
+# Open browser automatically (Mac/Linux)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     open "http://localhost:3008"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    xdg-open "http://localhost:3008" 2>/dev/null || echo "لطفاً مرورگر را به‌صورت دستی باز کنید: http://localhost:3008"
+    xdg-open "http://localhost:3008" 2>/dev/null || echo "Please open browser manually: http://localhost:3008"
 fi
 
-# اجرای سرور
-node server.js
+# Run server
+node server.cjs

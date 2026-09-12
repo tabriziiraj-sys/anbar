@@ -131,7 +131,7 @@ http://localhost:3008
 ## 🔧 تنظیمات
 
 ### پورت سرور
-در فایل `server.js` خط ۳ را ویرایش کنید:
+در فایل `server.cjs` خط ۵ را ویرایش کنید:
 
 ```javascript
 const PORT = 3008; // پورت مورد نظر
@@ -173,7 +173,7 @@ anbarino/
 │   ├── main.tsx            # نقطه ورود
 │   └── index.css           # استایل‌ها
 ├── dist/                   # خروجی build
-├── server.js               # سرور Node.js
+├── server.cjs              # سرور Node.js (CommonJS)
 ├── start.bat               # اسکریپت راه‌اندازی (ویندوز)
 ├── start.sh                # اسکریپت راه‌اندازی (لینوکس/مک)
 └── package.json

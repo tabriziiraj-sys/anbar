@@ -1,8 +1,10 @@
 {
   "app": "anbarino",
   "port": 3008,
-  "build": {
-    "location": "iran"
-  },
-  "disks": []
+  "disks": [
+    {
+      "name": "database",
+      "mountTo": "db"
+    }
+  ]
 }

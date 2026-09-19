@@ -117,11 +117,19 @@ function NavList({ route, onNav, serverConnected }: { route: Route; onNav: (r: R
       <div className="mt-6 mx-2 rounded-lg border border-white/10 bg-white/5 p-3 text-[11px] text-white/50 leading-5">
         <span className="text-saffron-300 font-bold">نسخه {faNum("1.0")}</span>
         <br />
-        <>
-          <span className="text-sky-400">✓ داده‌ها روی مرورگر (محلی) ذخیره می‌شوند</span>
-          <br />
-          <span className="text-white/40">حالت آفلاین — بدون نیاز به اینترنت</span>
-        </>
+        {serverConnected ? (
+          <>
+            <span className="text-emerald-400">✓ داده‌ها روی سرور (SQLite) ذخیره می‌شوند</span>
+            <br />
+            <span className="text-white/40">Sync خودکار فعال است</span>
+          </>
+        ) : (
+          <>
+            <span className="text-orange-400">⚠ سرور در دسترس نیست</span>
+            <br />
+            <span className="text-white/40">اتصال به پایگاه‌داده SQLite برقرار نیست</span>
+          </>
+        )}
       </div>
     </nav>
   );
@@ -167,10 +175,20 @@ export default function Layout({ children }: { children: ReactNode }) {
             <div className="mr-auto flex items-center gap-2.5">
               {/* نشانگر وضعیت ذخیره‌سازی */}
               <span className={`hidden sm:flex items-center gap-1.5 text-[11px] font-bold rounded-lg px-2.5 py-1.5 border ${
-                'text-sky-700 bg-sky-50 border-sky-200'
+                serverConnected 
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+                  : syncStatus === 'syncing'
+                  ? 'text-amber-700 bg-amber-50 border-amber-200'
+                  : 'text-orange-700 bg-orange-50 border-orange-200'
               }`}>
-                <span className="w-2 h-2 rounded-full bg-sky-500" />
-                {'محلی (مرورگر)'}
+                <span className={`w-2 h-2 rounded-full ${
+                  serverConnected 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : syncStatus === 'syncing'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-orange-500'
+                }`} />
+                {serverConnected ? 'SQLite (سرور)' : syncStatus === 'syncing' ? 'در حال اتصال...' : 'قطع اتصال'}
               </span>
               <span className="hidden md:flex items-center gap-2 text-[12px] text-ink-2 bg-paper border border-line rounded-lg px-3 py-1.5">
                 <I n="calendar" className="w-4 h-4 text-pine-600" />

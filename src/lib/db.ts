@@ -299,11 +299,12 @@ const DB_KEY = "anbarino_db_v1";
 export const SESSION_KEY = "anbarino_session";
 
 export function saveDB(db: DB) {
+  // ذخیره در localStorage (cache محلی)
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-  catch { /* حجم زیاد — هشدار در UI داده می‌شود */ }
+  catch { /* حجم زیاد */ }
   
-  // Sync به سرور غیرفعال است (حالت آفلاین)
-  // syncToServer(db);
+  // Sync به سرور SQLite
+  syncToServer(db);
 }
 
 // وضعیت آخرین sync
@@ -348,6 +349,32 @@ export async function loadFromServer(): Promise<DB | null> {
     // سرور در دسترس نیست
   }
   return null;
+}
+
+export async function loadDBAsync(): Promise<DB> {
+  // اول از سرور SQLite بخون
+  try {
+    const serverDb = await loadFromServer();
+    if (serverDb) {
+      // ذخیره در localStorage برای cache
+      saveDB(serverDb);
+      return serverDb;
+    }
+  } catch { /* سرور در دسترس نیست */ }
+  
+  // اگه سرور نبود، از localStorage بخون
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) {
+      const db = JSON.parse(raw) as DB;
+      if (db.version === 1) return db;
+    }
+  } catch { /* داده خراب → بازسازی */ }
+  
+  // اگه هیچی نبود، داده نمونه بساز
+  const fresh = seedDB();
+  saveDB(fresh);
+  return fresh;
 }
 
 export function loadDB(): DB {

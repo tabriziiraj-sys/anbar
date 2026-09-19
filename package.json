@@ -1,11 +1,14 @@
 {
-  "name": "sandbox-workspace",
+  "name": "anbarino",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start": "node server.cjs",
+    "postinstall": "npm run build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

@@ -5,7 +5,7 @@ const fs = require('fs');
 const db = require('./database.cjs');
 
 const app = express();
-const PORT = process.env.PORT || 3008;
+const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
 
 // Middleware
@@ -926,6 +926,7 @@ async function start() {
       console.log('  [OK] Server started successfully');
       console.log('  [OK] Port: ' + PORT);
       console.log('  [OK] Database: SQLite');
+      console.log('  [OK] Storage: /app/db (Liara Disk)');
       console.log('');
       console.log('  Access URL:');
       console.log('     http://localhost:' + PORT);

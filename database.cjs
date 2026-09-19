@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // مسیر دیتابیس - در Liara از دیسک استفاده می‌شود
+// در Liara مسیر نسبی نسبت به ریشه پروژه (/app) است
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'db', 'anbarino.db');
 
 // اطمینان از وجود پوشه db

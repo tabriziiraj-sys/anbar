@@ -115,28 +115,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmRef = useRef(confirmBox);
   confirmRef.current = confirmBox;
 
-  // بارگذاری از IndexedDB (دیتابیس واقعی)
+  // Sync با سرور SQLite هنگام لود اولیه
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setSyncStatus("syncing");
-      try {
-        const loadedDb = await loadDBAsync();
-        if (cancelled) return;
-        // اگه IndexedDB داده جدیدتری داره، آپدیت کن
+      const serverDb = await loadDBAsync();
+      if (cancelled) return;
+      if (serverDb) {
+        setServerConnected(true);
+        // اگه سرور داده جدیدتری داره، آپدیت کن
         setDb((prev) => {
-          if (loadedDb.seq.in >= prev.seq.in || loadedDb.seq.out >= prev.seq.out || 
-              loadedDb.seq.pay >= prev.seq.pay || loadedDb.products.length > prev.products.length ||
-              loadedDb.parties.length > prev.parties.length) {
-            saveDB(loadedDb);
-            return loadedDb;
+          if (serverDb.seq.in >= prev.seq.in && serverDb.seq.out >= prev.seq.out) {
+            saveDB(serverDb);
+            return serverDb;
           }
           return prev;
         });
-      } catch {}
-      if (cancelled) return;
-      setServerConnected(true);
-      setSyncStatus("synced");
+        setSyncStatus("synced");
+      } else {
+        setServerConnected(false);
+        setSyncStatus("error");
+      }
     })();
     return () => { cancelled = true; };
   }, []);

@@ -4,7 +4,7 @@ import type {
   DB, User, Company, Party, Product, StockDoc, Payment, Purchase, Expense,
   AuditAction, EntityName, Settings, Category,
 } from "./lib/db";
-import { loadDB, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel, getSyncInfo } from "./lib/db";
+import { loadDB, loadDBAsync, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel, getSyncInfo } from "./lib/db";
 import { PrintSheet } from "./components/ui";
 
 /* ---------------- مسیریابی ---------------- */
@@ -82,26 +82,63 @@ export const useApp = () => {
 /* ---------------- ارائه‌دهنده ---------------- */
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<DB>(() => loadDB());
+  const [db, setDb] = useState<DB>(() => {
+    // ابتدا از localStorage بخون (sync)
+    try {
+      const raw = localStorage.getItem("anbarino_db_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw) as DB;
+        if (parsed.version === 1) return parsed;
+      }
+    } catch {}
+    return seedDB();
+  });
   const [user, setUser] = useState<User | null>(() => {
     const id = localStorage.getItem(SESSION_KEY);
     if (!id) return null;
-    return loadDB().users.find((u) => u.id === id) ?? null;
+    try {
+      const raw = localStorage.getItem("anbarino_db_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw) as DB;
+        return parsed.users.find((u) => u.id === id) ?? null;
+      }
+    } catch {}
+    return null;
   });
   const [route, setRoute] = useState<Route>("dashboard");
   const [params, setParams] = useState<Params>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [confirmBox, setConfirmBox] = useState<{ msg: string; resolve: (v: boolean) => void } | null>(null);
-  const [serverConnected, setServerConnected] = useState(false);
+  const [serverConnected, setServerConnected] = useState(true);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
   const confirmRef = useRef(confirmBox);
   confirmRef.current = confirmBox;
 
-  // حالت آفلاین - بدون نیاز به سرور
+  // بارگذاری از IndexedDB (دیتابیس واقعی)
   useEffect(() => {
-    setServerConnected(false);
-    setSyncStatus("idle");
+    let cancelled = false;
+    (async () => {
+      setSyncStatus("syncing");
+      try {
+        const loadedDb = await loadDBAsync();
+        if (cancelled) return;
+        // اگه IndexedDB داده جدیدتری داره، آپدیت کن
+        setDb((prev) => {
+          if (loadedDb.seq.in >= prev.seq.in || loadedDb.seq.out >= prev.seq.out || 
+              loadedDb.seq.pay >= prev.seq.pay || loadedDb.products.length > prev.products.length ||
+              loadedDb.parties.length > prev.parties.length) {
+            saveDB(loadedDb);
+            return loadedDb;
+          }
+          return prev;
+        });
+      } catch {}
+      if (cancelled) return;
+      setServerConnected(true);
+      setSyncStatus("synced");
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   /* چاپ */

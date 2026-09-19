@@ -118,9 +118,9 @@ function NavList({ route, onNav, serverConnected }: { route: Route; onNav: (r: R
         <span className="text-saffron-300 font-bold">نسخه {faNum("1.0")}</span>
         <br />
         <>
-          <span className="text-sky-400">✓ داده‌ها روی مرورگر (محلی) ذخیره می‌شوند</span>
+          <span className="text-emerald-400">✓ داده‌ها روی پایگاه‌داده (IndexedDB) ذخیره می‌شوند</span>
           <br />
-          <span className="text-white/40">حالت آفلاین — بدون نیاز به اینترنت</span>
+          <span className="text-white/40">ذخیره‌سازی دائمی — بدون نیاز به سرور</span>
         </>
       </div>
     </nav>
@@ -167,10 +167,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             <div className="mr-auto flex items-center gap-2.5">
               {/* نشانگر وضعیت ذخیره‌سازی */}
               <span className={`hidden sm:flex items-center gap-1.5 text-[11px] font-bold rounded-lg px-2.5 py-1.5 border ${
-                'text-sky-700 bg-sky-50 border-sky-200'
+                'text-emerald-700 bg-emerald-50 border-emerald-200'
               }`}>
-                <span className="w-2 h-2 rounded-full bg-sky-500" />
-                {'محلی (مرورگر)'}
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {'IndexedDB (دیتابیس)'}
               </span>
               <span className="hidden md:flex items-center gap-2 text-[12px] text-ink-2 bg-paper border border-line rounded-lg px-3 py-1.5">
                 <I n="calendar" className="w-4 h-4 text-pine-600" />

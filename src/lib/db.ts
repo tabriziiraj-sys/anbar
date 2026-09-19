@@ -295,15 +295,20 @@ export function downloadCSV(filename: string, rows: (string | number)[][]) {
 
 /* ---------------- بارگذاری / ذخیره / داده نمونه ---------------- */
 
+import { saveToIndexedDB, loadFromIndexedDB } from "./indexedDb";
+
 const DB_KEY = "anbarino_db_v1";
 export const SESSION_KEY = "anbarino_session";
 
 export function saveDB(db: DB) {
+  // ذخیره در localStorage (برای دسترسی سریع)
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-  catch { /* حجم زیاد — هشدار در UI داده می‌شود */ }
+  catch { /* حجم زیاد */ }
   
-  // Sync به سرور غیرفعال است (حالت آفلاین)
-  // syncToServer(db);
+  // ذخیره در IndexedDB (دیتابیس واقعی)
+  saveToIndexedDB(DB_KEY, db).catch(err => {
+    console.warn('IndexedDB save failed:', err);
+  });
 }
 
 // وضعیت آخرین sync
@@ -348,6 +353,32 @@ export async function loadFromServer(): Promise<DB | null> {
     // سرور در دسترس نیست
   }
   return null;
+}
+
+export async function loadDBAsync(): Promise<DB> {
+  // اول از IndexedDB (دیتابیس واقعی) بخون
+  try {
+    const data = await loadFromIndexedDB(DB_KEY);
+    if (data && data.version === 1) return data as DB;
+  } catch { /* IndexedDB خطا داد */ }
+  
+  // اگه IndexedDB خالی بود، از localStorage بخون
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) {
+      const db = JSON.parse(raw) as DB;
+      if (db.version === 1) {
+        // ذخیره در IndexedDB برای دفعات بعد
+        saveToIndexedDB(DB_KEY, db).catch(() => {});
+        return db;
+      }
+    }
+  } catch { /* داده خراب → بازسازی */ }
+  
+  // اگه هیچی نبود، داده نمونه بساز
+  const fresh = seedDB();
+  saveDB(fresh);
+  return fresh;
 }
 
 export function loadDB(): DB {

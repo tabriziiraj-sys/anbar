@@ -95,22 +95,22 @@ export default function Dashboard() {
   return (
     <div>
       {/* وضعیت ذخیره‌سازی */}
-      <div className="mb-4 rounded-xl border p-3.5 flex items-center gap-3 anim-fade-up bg-sky-50 border-sky-200">
-        <span className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
+      <div className="mb-4 rounded-xl border p-3.5 flex items-center gap-3 anim-fade-up bg-emerald-50 border-emerald-200">
+        <span className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01"/>
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
           </svg>
         </span>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-bold text-sky-800">
-            ✓ داده‌ها روی مرورگر شما ذخیره می‌شوند
+          <div className="text-[13px] font-bold text-emerald-800">
+            ✓ داده‌ها روی پایگاه‌داده ذخیره می‌شوند
           </div>
           <div className="text-[11px] text-ink-3 mt-0.5">
-            حالت آفلاین — تمام اطلاعات به‌صورت محلی در مرورگر ذخیره شده و نیازی به اینترنت نیست
+            IndexedDB — تمام اطلاعات به‌صورت دائمی در دیتابیس مرورگر ذخیره شده و با بستن مرورگر پاک نمی‌شوند
           </div>
         </div>
-        <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-sky-200/60 text-sky-700">
-          localStorage
+        <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-200/60 text-emerald-700">
+          IndexedDB
         </span>
       </div>
 

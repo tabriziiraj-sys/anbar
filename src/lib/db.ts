@@ -301,6 +301,53 @@ export const SESSION_KEY = "anbarino_session";
 export function saveDB(db: DB) {
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch { /* حجم زیاد — هشدار در UI داده می‌شود */ }
+  
+  // Sync به سرور (fire and forget)
+  syncToServer(db);
+}
+
+// وضعیت آخرین sync
+let _lastSyncToServer: number | null = null;
+let _syncError: string | null = null;
+export const getSyncInfo = () => ({ lastSync: _lastSyncToServer, error: _syncError });
+
+async function syncToServer(db: DB) {
+  try {
+    // اول health check
+    const healthRes = await fetch("/api/health", { signal: AbortSignal.timeout(5000) });
+    if (!healthRes.ok) throw new Error("Server unavailable");
+    
+    // sync کامل دیتابیس به سرور
+    const res = await fetch("/api/sync/full", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(db),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      _lastSyncToServer = Date.now();
+      _syncError = null;
+    } else {
+      _syncError = `HTTP ${res.status}`;
+    }
+  } catch (err: any) {
+    _syncError = err?.message || "Sync failed";
+  }
+}
+
+export async function loadFromServer(): Promise<DB | null> {
+  try {
+    const res = await fetch("/api/sync/full", { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.version === 1) {
+        return data as DB;
+      }
+    }
+  } catch {
+    // سرور در دسترس نیست
+  }
+  return null;
 }
 
 export function loadDB(): DB {

@@ -3,12 +3,43 @@ const path = require('path');
 const fs = require('fs');
 
 // مسیر دیتابیس - در Liara از دیسک استفاده می‌شود
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'db', 'anbarino.db');
+// اولویت با environment variable، سپس مسیر دیسک mount شده
+let DB_PATH = process.env.DB_PATH;
 
-// اطمینان از وجود پوشه db
+if (!DB_PATH) {
+  // تلاش برای استفاده از مسیر دیسک mount شده در Liara
+  const diskPath = path.join(__dirname, 'db');
+  try {
+    // بررسی اینکه آیا مسیر دیسک writable هست
+    if (fs.existsSync(diskPath)) {
+      fs.accessSync(diskPath, fs.constants.W_OK);
+      DB_PATH = path.join(diskPath, 'anbarino.db');
+    } else {
+      // اگر مسیر دیسک وجود نداره، از /tmp استفاده کن
+      DB_PATH = path.join('/tmp', 'anbarino.db');
+      console.log('Warning: Disk not mounted, using /tmp (data will be lost on restart)');
+    }
+  } catch (err) {
+    // اگر writable نیست، از /tmp استفاده کن
+    DB_PATH = path.join('/tmp', 'anbarino.db');
+    console.log('Warning: Disk not writable, using /tmp (data will be lost on restart)');
+  }
+}
+
+// اطمینان از وجود پوشه
 const dbDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+try {
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (err) {
+  console.error('Failed to create database directory:', err.message);
+  // fallback به /tmp
+  DB_PATH = path.join('/tmp', 'anbarino.db');
+  const tmpDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  }
 }
 
 let db = null;

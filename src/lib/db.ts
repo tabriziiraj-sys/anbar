@@ -302,8 +302,8 @@ export function saveDB(db: DB) {
   try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   catch { /* حجم زیاد — هشدار در UI داده می‌شود */ }
   
-  // Sync به سرور (fire and forget)
-  syncToServer(db);
+  // Sync به سرور غیرفعال است (حالت آفلاین)
+  // syncToServer(db);
 }
 
 // وضعیت آخرین sync

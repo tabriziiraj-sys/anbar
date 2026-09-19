@@ -22,6 +22,7 @@ app.get('/api/health', (req, res) => {
 
 // Full Sync - دریافت کل دیتابیس از سرور
 app.get('/api/sync/full', async (req, res) => {
+  console.log('[SYNC] GET /api/sync/full called');
   try {
     // جمع‌آوری تمام داده‌ها از SQLite
     const users = await db.all('SELECT * FROM users ORDER BY createdAt');
@@ -94,11 +95,14 @@ app.get('/api/sync/full', async (req, res) => {
 
 // Full Sync - دریافت دیتابیس از کلاینت و ذخیره در SQLite
 app.post('/api/sync/full', async (req, res) => {
+  console.log('[SYNC] POST /api/sync/full called');
   try {
     const data = req.body;
     if (!data || data.version !== 1) {
+      console.log('[SYNC] Invalid data format');
       return res.status(400).json({ error: 'Invalid data format' });
     }
+    console.log('[SYNC] Data received, syncing to SQLite...');
     
     // ذخیره کاربران
     for (const u of (data.users || [])) {
@@ -241,9 +245,10 @@ app.post('/api/sync/full', async (req, res) => {
       }
     }
     
+    console.log('[SYNC] ✓ Data synced to SQLite successfully');
     res.json({ success: true, message: 'Data synced to SQLite successfully' });
   } catch (err) {
-    console.error('Sync error:', err);
+    console.error('[SYNC] ✗ Error:', err);
     res.status(500).json({ error: err.message });
   }
 });

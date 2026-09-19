@@ -95,52 +95,22 @@ export default function Dashboard() {
   return (
     <div>
       {/* وضعیت ذخیره‌سازی */}
-      <div className={`mb-4 rounded-xl border p-3.5 flex items-center gap-3 anim-fade-up ${
-        serverConnected 
-          ? 'bg-emerald-50 border-emerald-200' 
-          : syncStatus === 'syncing'
-          ? 'bg-amber-50 border-amber-200'
-          : 'bg-orange-50 border-orange-200'
-      }`}>
-        <span className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-          serverConnected 
-            ? 'bg-emerald-100 text-emerald-600' 
-            : syncStatus === 'syncing'
-            ? 'bg-amber-100 text-amber-600'
-            : 'bg-orange-100 text-orange-600'
-        }`}>
-          {serverConnected ? (
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01"/>
-            </svg>
-          )}
+      <div className="mb-4 rounded-xl border p-3.5 flex items-center gap-3 anim-fade-up bg-sky-50 border-sky-200">
+        <span className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-sky-100 text-sky-600">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01"/>
+          </svg>
         </span>
         <div className="flex-1 min-w-0">
-          <div className={`text-[13px] font-bold ${
-            serverConnected ? 'text-emerald-800' : syncStatus === 'syncing' ? 'text-amber-800' : 'text-orange-800'
-          }`}>
-            {serverConnected ? '✓ داده‌ها روی سرور (SQLite) ذخیره می‌شوند' : syncStatus === 'syncing' ? '⏳ در حال بررسی اتصال به سرور...' : '⚠ داده‌ها فقط روی مرورگر (محلی) ذخیره می‌شوند'}
+          <div className="text-[13px] font-bold text-sky-800">
+            ✓ داده‌ها روی مرورگر شما ذخیره می‌شوند
           </div>
           <div className="text-[11px] text-ink-3 mt-0.5">
-            {serverConnected 
-              ? 'اتصال برقرار — هر تغییر به‌صورت خودکار با پایگاه‌داده SQLite سرور همگام‌سازی می‌شود' 
-              : syncStatus === 'syncing'
-              ? 'لطفاً صبر کنید...'
-              : 'سرور در دسترس نیست — داده‌ها فقط در مرورگر شما ذخیره شده‌اند و با پاک کردن cache از بین می‌روند'}
+            حالت آفلاین — تمام اطلاعات به‌صورت محلی در مرورگر ذخیره شده و نیازی به اینترنت نیست
           </div>
         </div>
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${
-          serverConnected 
-            ? 'bg-emerald-200/60 text-emerald-700' 
-            : syncStatus === 'syncing'
-            ? 'bg-amber-200/60 text-amber-700'
-            : 'bg-orange-200/60 text-orange-700'
-        }`}>
-          {serverConnected ? 'SQLite' : syncStatus === 'syncing' ? '...' : 'localStorage'}
+        <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-sky-200/60 text-sky-700">
+          localStorage
         </span>
       </div>
 

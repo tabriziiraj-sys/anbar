@@ -4,7 +4,7 @@ import type {
   DB, User, Company, Party, Product, StockDoc, Payment, Purchase, Expense,
   AuditAction, EntityName, Settings, Category,
 } from "./lib/db";
-import { loadDB, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel, loadFromServer, getSyncInfo } from "./lib/db";
+import { loadDB, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel, getSyncInfo } from "./lib/db";
 import { PrintSheet } from "./components/ui";
 
 /* ---------------- مسیریابی ---------------- */
@@ -98,30 +98,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmRef = useRef(confirmBox);
   confirmRef.current = confirmBox;
 
-  // Sync با سرور هنگام لود اولیه
+  // حالت آفلاین - بدون نیاز به سرور
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setSyncStatus("syncing");
-      const serverDb = await loadFromServer();
-      if (cancelled) return;
-      if (serverDb) {
-        setServerConnected(true);
-        // اگه سرور داده جدیدتری داره، آپدیت کن
-        setDb((prev) => {
-          if (serverDb.seq.in >= prev.seq.in && serverDb.seq.out >= prev.seq.out) {
-            saveDB(serverDb);
-            return serverDb;
-          }
-          return prev;
-        });
-        setSyncStatus("synced");
-      } else {
-        setServerConnected(false);
-        setSyncStatus("error");
-      }
-    })();
-    return () => { cancelled = true; };
+    setServerConnected(false);
+    setSyncStatus("idle");
   }, []);
 
   /* چاپ */

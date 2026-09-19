@@ -1,4 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
@@ -16,36 +16,31 @@ let db;
 
 function getDb() {
   if (!db) {
-    db = new sqlite3.Database(DB_PATH);
+    db = new Database(DB_PATH);
+    // تنظیمات بهینه‌سازی
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
   }
   return db;
 }
 
-// تبدیل callback به Promise
+// توابع سازگار با API قبلی (Promise-based)
 function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    getDb().run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
+  return Promise.resolve().then(() => {
+    const result = getDb().prepare(sql).run(...params);
+    return { lastID: result.lastInsertRowid, changes: result.changes };
   });
 }
 
 function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    getDb().get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
+  return Promise.resolve().then(() => {
+    return getDb().prepare(sql).get(...params);
   });
 }
 
 function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    getDb().all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
+  return Promise.resolve().then(() => {
+    return getDb().prepare(sql).all(...params);
   });
 }
 
@@ -99,21 +94,28 @@ async function initDatabase() {
   await run(`
     CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,
-      name TEXT NOT NULL
+      name TEXT NOT NULL,
+      parentId TEXT,
+      sortOrder INTEGER DEFAULT 0,
+      createdBy TEXT,
+      createdAt INTEGER,
+      updatedBy TEXT,
+      updatedAt INTEGER
     )
   `);
 
   await run(`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
-      code TEXT NOT NULL,
       name TEXT NOT NULL,
+      code TEXT UNIQUE,
       categoryId TEXT,
       unit TEXT,
-      image TEXT,
-      minStock INTEGER DEFAULT 0,
       buyPrice REAL DEFAULT 0,
       sellPrice REAL DEFAULT 0,
+      stock REAL DEFAULT 0,
+      minStock REAL DEFAULT 0,
+      image TEXT,
       note TEXT,
       createdBy TEXT,
       createdAt INTEGER,
@@ -123,12 +125,20 @@ async function initDatabase() {
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS stock_docs (
+    CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      no INTEGER NOT NULL,
-      date TEXT NOT NULL,
+      type TEXT NOT NULL,
+      number TEXT UNIQUE,
+      date INTEGER NOT NULL,
       partyId TEXT,
+      partyName TEXT,
+      subtotal REAL DEFAULT 0,
+      discount REAL DEFAULT 0,
+      tax REAL DEFAULT 0,
+      total REAL DEFAULT 0,
+      paid REAL DEFAULT 0,
+      remaining REAL DEFAULT 0,
+      status TEXT DEFAULT 'draft',
       note TEXT,
       createdBy TEXT,
       createdAt INTEGER,
@@ -138,169 +148,63 @@ async function initDatabase() {
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS stock_doc_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      docId TEXT NOT NULL,
-      productId TEXT NOT NULL,
-      qty INTEGER NOT NULL,
-      price REAL NOT NULL,
-      FOREIGN KEY (docId) REFERENCES stock_docs(id) ON DELETE CASCADE,
-      FOREIGN KEY (productId) REFERENCES products(id)
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id TEXT PRIMARY KEY,
+      invoiceId TEXT NOT NULL,
+      productId TEXT,
+      productName TEXT,
+      productCode TEXT,
+      quantity REAL NOT NULL,
+      unitPrice REAL NOT NULL,
+      discount REAL DEFAULT 0,
+      total REAL NOT NULL,
+      sortOrder INTEGER DEFAULT 0
     )
   `);
 
   await run(`
     CREATE TABLE IF NOT EXISTS payments (
       id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      misc INTEGER DEFAULT 0,
-      no INTEGER NOT NULL,
-      date TEXT NOT NULL,
+      invoiceId TEXT,
       partyId TEXT,
+      type TEXT NOT NULL,
       amount REAL NOT NULL,
       method TEXT,
-      refNo TEXT,
+      referenceNo TEXT,
+      date INTEGER NOT NULL,
       note TEXT,
       createdBy TEXT,
-      createdAt INTEGER,
-      updatedBy TEXT,
-      updatedAt INTEGER
+      createdAt INTEGER
     )
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS purchases (
+    CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
-      no INTEGER NOT NULL,
-      date TEXT NOT NULL,
-      partyId TEXT,
-      title TEXT NOT NULL,
+      category TEXT,
       amount REAL NOT NULL,
-      note TEXT,
-      image TEXT,
-      createdBy TEXT,
-      createdAt INTEGER,
-      updatedBy TEXT,
-      updatedAt INTEGER
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS expenses (
-      id TEXT PRIMARY KEY,
-      no INTEGER NOT NULL,
-      date TEXT NOT NULL,
-      typeId TEXT NOT NULL,
+      date INTEGER NOT NULL,
+      description TEXT,
+      referenceNo TEXT,
       partyId TEXT,
-      amount REAL NOT NULL,
-      method TEXT,
-      note TEXT,
-      image TEXT,
+      invoiceId TEXT,
       createdBy TEXT,
-      createdAt INTEGER,
-      updatedBy TEXT,
-      updatedAt INTEGER
+      createdAt INTEGER
     )
   `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS expense_types (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS audit_logs (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      userName TEXT NOT NULL,
-      action TEXT NOT NULL,
-      entity TEXT NOT NULL,
-      ref TEXT,
-      at INTEGER NOT NULL
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      allowNegative INTEGER DEFAULT 0,
-      currency TEXT DEFAULT 'ریال',
-      printShowLogo INTEGER DEFAULT 1,
-      printShowSign INTEGER DEFAULT 1,
-      printFooter TEXT
-    )
-  `);
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS sequences (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      inSeq INTEGER DEFAULT 1001,
-      outSeq INTEGER DEFAULT 1001,
-      paySeq INTEGER DEFAULT 2201,
-      purchaseSeq INTEGER DEFAULT 501,
-      expenseSeq INTEGER DEFAULT 801
-    )
-  `);
-
-  // درج داده‌های اولیه اگر خالی هستند
-  const userCount = await get('SELECT COUNT(*) as count FROM users');
-  if (userCount.count === 0) {
-    await seedDatabase();
+  // ایجاد کاربر پیش‌فرض ادمین
+  const adminExists = await get('SELECT id FROM users WHERE username = ?', ['admin']);
+  if (!adminExists) {
+    await run(
+      'INSERT INTO users (id, fullName, username, password, active, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+      ['admin-001', 'مدیر سیستم', 'admin', 'admin123', 1, Date.now()]
+    );
+    console.log('Default admin user created (username: admin, password: admin123)');
   }
 
   console.log('Database initialized successfully');
 }
 
-// درج داده‌های نمونه
-async function seedDatabase() {
-  const now = Date.now();
-  const daysAgo = (d) => now - d * 24 * 60 * 60 * 1000;
-
-  // کاربران
-  await run(
-    'INSERT INTO users (id, fullName, username, password, active, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-    ['u-admin', 'علی احمدی', 'admin', '1234', 1, daysAgo(90)]
-  );
-  await run(
-    'INSERT INTO users (id, fullName, username, password, active, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-    ['u-sara', 'سارا محمدی', 'sara', '1234', 1, daysAgo(80)]
-  );
-
-  // شرکت
-  await run(
-    'INSERT INTO company (id, name, phone, mobile, address, economicCode, nationalId, regNo, note) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)',
-    ['بازرگانی آریا گستر', '۰۲۱‑۴۴۵۵۶۶۷۷', '۰۹۱۲‑۱۲۳۴۵۶۷', 'تهران، خیابان آزادی', '۴۱۱۲۳۴۵۶۷۸۹۰', '۱۰۱۰۲۳۴۵۶۷۸', '۴۵۶۷۸', 'پخش عمده مواد غذایی']
-  );
-
-  // تنظیمات
-  await run(
-    'INSERT INTO settings (id, allowNegative, currency, printShowLogo, printShowSign, printFooter) VALUES (1, 0, ?, 1, 1, ?)',
-    ['ریال', 'از همکاری شما سپاسگزاریم']
-  );
-
-  // دنباله‌ها
-  await run(
-    'INSERT INTO sequences (id, inSeq, outSeq, paySeq, purchaseSeq, expenseSeq) VALUES (1, 1001, 1001, 2201, 501, 801)'
-  );
-
-  console.log('Seed data inserted');
-}
-
-// بستن دیتابیس
-function closeDb() {
-  if (db) {
-    db.close();
-  }
-}
-
-module.exports = {
-  initDatabase,
-  run,
-  get,
-  all,
-  closeDb,
-  getDb
-};
+module.exports = { run, get, all, initDatabase };

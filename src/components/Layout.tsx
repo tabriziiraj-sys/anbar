@@ -88,7 +88,7 @@ function Brand() {
   );
 }
 
-function NavList({ route, onNav }: { route: Route; onNav: (r: Route) => void }) {
+function NavList({ route, onNav, serverConnected }: { route: Route; onNav: (r: Route) => void; serverConnected: boolean }) {
   return (
     <nav className="px-3 pb-6 flex-1 overflow-y-auto">
       {MENU.map((g, gi) => (
@@ -115,16 +115,28 @@ function NavList({ route, onNav }: { route: Route; onNav: (r: Route) => void }) 
         </div>
       ))}
       <div className="mt-6 mx-2 rounded-lg border border-white/10 bg-white/5 p-3 text-[11px] text-white/50 leading-5">
-        <span className="text-saffron-300 font-bold">نسخه {faNum("1.0")} — اجرا به‌صورت محلی</span>
+        <span className="text-saffron-300 font-bold">نسخه {faNum("1.0")}</span>
         <br />
-        داده‌ها روی همین دستگاه ذخیره می‌شوند؛ نسخه پشتیبان را از تنظیمات تهیه کنید.
+        {serverConnected ? (
+          <>
+            <span className="text-emerald-400">✓ داده‌ها روی سرور (SQLite) ذخیره می‌شوند</span>
+            <br />
+            <span className="text-white/40">Sync خودکار فعال است</span>
+          </>
+        ) : (
+          <>
+            <span className="text-orange-400">⚠ داده‌ها روی مرورگر (محلی) ذخیره می‌شوند</span>
+            <br />
+            <span className="text-white/40">سرور در دسترس نیست</span>
+          </>
+        )}
       </div>
     </nav>
   );
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { route, nav, user, logout, db } = useApp();
+  const { route, nav, user, logout, db, serverConnected, syncStatus } = useApp();
   const [drawer, setDrawer] = useState(false);
 
   const go = (r: Route) => { nav(r); setDrawer(false); };
@@ -135,7 +147,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="hidden lg:flex flex-col w-[248px] shrink-0 sticky top-0 h-screen bg-night bg-gradient-to-b from-night-2 via-night to-night border-l border-white/5"
         style={{ background: "linear-gradient(180deg,#123330 0%,#0c211e 45%,#0a1b19 100%)" }}>
         <Brand />
-        <NavList route={route} onNav={go} />
+        <NavList route={route} onNav={go} serverConnected={serverConnected} />
       </aside>
 
       {/* سایدبار موبایل */}
@@ -145,7 +157,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <aside className="absolute inset-y-0 right-0 w-[260px] flex flex-col anim-fade-up"
             style={{ background: "linear-gradient(180deg,#123330 0%,#0c211e 45%,#0a1b19 100%)" }}>
             <Brand />
-            <NavList route={route} onNav={go} />
+            <NavList route={route} onNav={go} serverConnected={serverConnected} />
           </aside>
         </div>
       )}
@@ -161,6 +173,23 @@ export default function Layout({ children }: { children: ReactNode }) {
               <h2 className="font-bold text-[15px] text-night truncate">{TITLES[route]}</h2>
             </div>
             <div className="mr-auto flex items-center gap-2.5">
+              {/* نشانگر وضعیت ذخیره‌سازی */}
+              <span className={`hidden sm:flex items-center gap-1.5 text-[11px] font-bold rounded-lg px-2.5 py-1.5 border ${
+                serverConnected 
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+                  : syncStatus === 'syncing'
+                  ? 'text-amber-700 bg-amber-50 border-amber-200'
+                  : 'text-orange-700 bg-orange-50 border-orange-200'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  serverConnected 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : syncStatus === 'syncing'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-orange-500'
+                }`} />
+                {serverConnected ? 'SQLite (سرور)' : syncStatus === 'syncing' ? 'در حال اتصال...' : 'محلی (مرورگر)'}
+              </span>
               <span className="hidden md:flex items-center gap-2 text-[12px] text-ink-2 bg-paper border border-line rounded-lg px-3 py-1.5">
                 <I n="calendar" className="w-4 h-4 text-pine-600" />
                 {faDateLong(todayISO())}

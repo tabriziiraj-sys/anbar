@@ -17,7 +17,235 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', timestamp: Date.now(), storage: 'sqlite' });
+});
+
+// Full Sync - دریافت کل دیتابیس از سرور
+app.get('/api/sync/full', async (req, res) => {
+  try {
+    // جمع‌آوری تمام داده‌ها از SQLite
+    const users = await db.all('SELECT * FROM users ORDER BY createdAt');
+    const company = await db.get('SELECT * FROM company WHERE id = 1');
+    const parties = await db.all('SELECT * FROM parties ORDER BY name');
+    const categories = await db.all('SELECT * FROM product_categories ORDER BY name');
+    const products = await db.all('SELECT * FROM products ORDER BY name');
+    const stockDocs = await db.all('SELECT * FROM stock_docs ORDER BY date');
+    const stockDocItems = await db.all('SELECT * FROM stock_doc_items');
+    const payments = await db.all('SELECT * FROM payments ORDER BY date');
+    const purchases = await db.all('SELECT * FROM purchases ORDER BY date');
+    const expenses = await db.all('SELECT * FROM expenses ORDER BY date');
+    const expenseTypes = await db.all('SELECT * FROM expense_types ORDER BY name');
+    const auditLogs = await db.all('SELECT * FROM audit_logs ORDER BY at DESC LIMIT 800');
+    const settings = await db.get('SELECT * FROM settings WHERE id = 1');
+    
+    // ساختار items برای هر stock doc
+    const docsWithItems = stockDocs.map(doc => ({
+      ...doc,
+      items: stockDocItems.filter(item => item.docId === doc.id).map(item => ({
+        productId: item.productId,
+        qty: item.qty,
+        price: item.price,
+      })),
+    }));
+    
+    // محاسبه seq
+    const maxIn = await db.get('SELECT MAX(no) as maxNo FROM stock_docs WHERE kind = "in"');
+    const maxOut = await db.get('SELECT MAX(no) as maxNo FROM stock_docs WHERE kind = "out"');
+    const maxPay = await db.get('SELECT MAX(no) as maxNo FROM payments');
+    const maxPurchase = await db.get('SELECT MAX(no) as maxNo FROM purchases');
+    const maxExpense = await db.get('SELECT MAX(no) as maxNo FROM expenses');
+    
+    const fullDb = {
+      version: 1,
+      seq: {
+        in: (maxIn?.maxNo || 0) + 1,
+        out: (maxOut?.maxNo || 0) + 1,
+        pay: (maxPay?.maxNo || 0) + 1,
+        purchase: (maxPurchase?.maxNo || 0) + 1,
+        expense: (maxExpense?.maxNo || 0) + 1,
+      },
+      users: users.map(u => ({ ...u, active: !!u.active })),
+      company: company || { name: '', logo: null, phone: '', mobile: '', address: '', economicCode: '', nationalId: '', regNo: '', note: '' },
+      parties: parties.map(p => ({ ...p, type: p.type || 'other' })),
+      categories,
+      products: products.map(p => ({ ...p, image: p.image || null })),
+      stockDocs: docsWithItems.map(d => ({ ...d, kind: d.kind, partyId: d.partyId || null })),
+      payments: payments.map(p => ({ ...p, kind: p.kind, misc: !!p.misc, partyId: p.partyId || null, image: p.image || null })),
+      purchases: purchases.map(p => ({ ...p, partyId: p.partyId || null, image: p.image || null })),
+      expenses: expenses.map(e => ({ ...e, partyId: e.partyId || null, image: e.image || null })),
+      expenseTypes,
+      audit: auditLogs.map(a => ({ id: a.id, userId: a.userId, userName: a.userName, action: a.action, entity: a.entity, ref: a.ref, at: a.at })),
+      settings: settings ? {
+        allowNegative: !!settings.allowNegative,
+        currency: settings.currency || 'ریال',
+        print: {
+          showLogo: !!settings.showLogo,
+          showSign: !!settings.showSign,
+          footer: settings.footer || '',
+        },
+      } : { allowNegative: false, currency: 'ریال', print: { showLogo: true, showSign: true, footer: '' } },
+    };
+    
+    res.json(fullDb);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Full Sync - دریافت دیتابیس از کلاینت و ذخیره در SQLite
+app.post('/api/sync/full', async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || data.version !== 1) {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+    
+    // ذخیره کاربران
+    for (const u of (data.users || [])) {
+      const existing = await db.get('SELECT id FROM users WHERE id = ?', [u.id]);
+      if (existing) {
+        await db.run('UPDATE users SET fullName=?, username=?, password=?, active=?, createdAt=? WHERE id=?',
+          [u.fullName, u.username, u.password, u.active ? 1 : 0, u.createdAt, u.id]);
+      } else {
+        await db.run('INSERT INTO users (id, fullName, username, password, active, createdAt) VALUES (?,?,?,?,?,?)',
+          [u.id, u.fullName, u.username, u.password, u.active ? 1 : 0, u.createdAt]);
+      }
+    }
+    
+    // ذخیره شرکت
+    const company = data.company || {};
+    const existingCompany = await db.get('SELECT id FROM company WHERE id = 1');
+    if (existingCompany) {
+      await db.run('UPDATE company SET name=?, logo=?, phone=?, mobile=?, address=?, economicCode=?, nationalId=?, regNo=?, note=? WHERE id=1',
+        [company.name||'', company.logo||null, company.phone||'', company.mobile||'', company.address||'', company.economicCode||'', company.nationalId||'', company.regNo||'', company.note||'']);
+    } else {
+      await db.run('INSERT INTO company (id, name, logo, phone, mobile, address, economicCode, nationalId, regNo, note) VALUES (1,?,?,?,?,?,?,?,?,?)',
+        [company.name||'', company.logo||null, company.phone||'', company.mobile||'', company.address||'', company.economicCode||'', company.nationalId||'', company.regNo||'', company.note||'']);
+    }
+    
+    // ذخیره طرف حساب‌ها
+    for (const p of (data.parties || [])) {
+      const existing = await db.get('SELECT id FROM parties WHERE id = ?', [p.id]);
+      if (existing) {
+        await db.run('UPDATE parties SET name=?, type=?, phone=?, mobile=?, address=?, nationalId=?, note=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [p.name, p.type, p.phone||'', p.mobile||'', p.address||'', p.nationalId||'', p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0, p.id]);
+      } else {
+        await db.run('INSERT INTO parties (id, name, type, phone, mobile, address, nationalId, note, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.name, p.type, p.phone||'', p.mobile||'', p.address||'', p.nationalId||'', p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0]);
+      }
+    }
+    
+    // ذخیره دسته‌بندی‌ها
+    for (const c of (data.categories || [])) {
+      const existing = await db.get('SELECT id FROM product_categories WHERE id = ?', [c.id]);
+      if (existing) {
+        await db.run('UPDATE product_categories SET name=? WHERE id=?', [c.name, c.id]);
+      } else {
+        await db.run('INSERT INTO product_categories (id, name) VALUES (?,?)', [c.id, c.name]);
+      }
+    }
+    
+    // ذخیره محصولات
+    for (const p of (data.products || [])) {
+      const existing = await db.get('SELECT id FROM products WHERE id = ?', [p.id]);
+      if (existing) {
+        await db.run('UPDATE products SET code=?, name=?, categoryId=?, unit=?, image=?, minStock=?, buyPrice=?, sellPrice=?, note=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [p.code, p.name, p.categoryId, p.unit, p.image||null, p.minStock||0, p.buyPrice||0, p.sellPrice||0, p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0, p.id]);
+      } else {
+        await db.run('INSERT INTO products (id, code, name, categoryId, unit, image, minStock, buyPrice, sellPrice, note, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.code, p.name, p.categoryId, p.unit, p.image||null, p.minStock||0, p.buyPrice||0, p.sellPrice||0, p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0]);
+      }
+    }
+    
+    // ذخیره اسناد انبار
+    for (const d of (data.stockDocs || [])) {
+      const existing = await db.get('SELECT id FROM stock_docs WHERE id = ?', [d.id]);
+      if (existing) {
+        await db.run('UPDATE stock_docs SET kind=?, no=?, date=?, partyId=?, note=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [d.kind, d.no, d.date, d.partyId||null, d.note||'', d.createdBy||'', d.createdAt||0, d.updatedBy||'', d.updatedAt||0, d.id]);
+      } else {
+        await db.run('INSERT INTO stock_docs (id, kind, no, date, partyId, note, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          [d.id, d.kind, d.no, d.date, d.partyId||null, d.note||'', d.createdBy||'', d.createdAt||0, d.updatedBy||'', d.updatedAt||0]);
+      }
+      
+      // حذف items قدیمی و درج جدید
+      await db.run('DELETE FROM stock_doc_items WHERE docId = ?', [d.id]);
+      for (const item of (d.items || [])) {
+        const itemId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        await db.run('INSERT INTO stock_doc_items (id, docId, productId, qty, price) VALUES (?,?,?,?,?)',
+          [itemId, d.id, item.productId, item.qty, item.price]);
+      }
+    }
+    
+    // ذخیره پرداخت‌ها
+    for (const p of (data.payments || [])) {
+      const existing = await db.get('SELECT id FROM payments WHERE id = ?', [p.id]);
+      if (existing) {
+        await db.run('UPDATE payments SET kind=?, misc=?, no=?, date=?, partyId=?, amount=?, method=?, refNo=?, note=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [p.kind, p.misc?1:0, p.no, p.date, p.partyId||null, p.amount||0, p.method||'', p.refNo||'', p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0, p.id]);
+      } else {
+        await db.run('INSERT INTO payments (id, kind, misc, no, date, partyId, amount, method, refNo, note, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.kind, p.misc?1:0, p.no, p.date, p.partyId||null, p.amount||0, p.method||'', p.refNo||'', p.note||'', p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0]);
+      }
+    }
+    
+    // ذخیره خریدها
+    for (const p of (data.purchases || [])) {
+      const existing = await db.get('SELECT id FROM purchases WHERE id = ?', [p.id]);
+      if (existing) {
+        await db.run('UPDATE purchases SET type=?, no=?, date=?, partyId=?, title=?, amount=?, note=?, image=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [p.type, p.no, p.date, p.partyId||null, p.title||'', p.amount||0, p.note||'', p.image||null, p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0, p.id]);
+      } else {
+        await db.run('INSERT INTO purchases (id, type, no, date, partyId, title, amount, note, image, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.type, p.no, p.date, p.partyId||null, p.title||'', p.amount||0, p.note||'', p.image||null, p.createdBy||'', p.createdAt||0, p.updatedBy||'', p.updatedAt||0]);
+      }
+    }
+    
+    // ذخیره هزینه‌ها
+    for (const e of (data.expenses || [])) {
+      const existing = await db.get('SELECT id FROM expenses WHERE id = ?', [e.id]);
+      if (existing) {
+        await db.run('UPDATE expenses SET no=?, date=?, typeId=?, partyId=?, amount=?, method=?, note=?, image=?, createdBy=?, createdAt=?, updatedBy=?, updatedAt=? WHERE id=?',
+          [e.no, e.date, e.typeId, e.partyId||null, e.amount||0, e.method||'', e.note||'', e.image||null, e.createdBy||'', e.createdAt||0, e.updatedBy||'', e.updatedAt||0, e.id]);
+      } else {
+        await db.run('INSERT INTO expenses (id, no, date, typeId, partyId, amount, method, note, image, createdBy, createdAt, updatedBy, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [e.id, e.no, e.date, e.typeId, e.partyId||null, e.amount||0, e.method||'', e.note||'', e.image||null, e.createdBy||'', e.createdAt||0, e.updatedBy||'', e.updatedAt||0]);
+      }
+    }
+    
+    // ذخیره انواع هزینه
+    for (const et of (data.expenseTypes || [])) {
+      const existing = await db.get('SELECT id FROM expense_types WHERE id = ?', [et.id]);
+      if (!existing) {
+        await db.run('INSERT INTO expense_types (id, name) VALUES (?,?)', [et.id, et.name]);
+      }
+    }
+    
+    // ذخیره تنظیمات
+    const settings = data.settings || {};
+    const existingSettings = await db.get('SELECT id FROM settings WHERE id = 1');
+    if (existingSettings) {
+      await db.run('UPDATE settings SET allowNegative=?, currency=?, showLogo=?, showSign=?, footer=? WHERE id=1',
+        [settings.allowNegative?1:0, settings.currency||'ریال', settings.print?.showLogo?1:0, settings.print?.showSign?1:0, settings.print?.footer||'']);
+    } else {
+      await db.run('INSERT INTO settings (id, allowNegative, currency, showLogo, showSign, footer) VALUES (1,?,?,?,?,?)',
+        [settings.allowNegative?1:0, settings.currency||'ریال', settings.print?.showLogo?1:0, settings.print?.showSign?1:0, settings.print?.footer||'']);
+    }
+    
+    // ذخیره لاگ‌های حسابرسی
+    for (const a of (data.audit || []).slice(0, 100)) {
+      const existing = await db.get('SELECT id FROM audit_logs WHERE id = ?', [a.id]);
+      if (!existing) {
+        await db.run('INSERT INTO audit_logs (id, userId, userName, action, entity, ref, at) VALUES (?,?,?,?,?,?,?)',
+          [a.id, a.userId||'', a.userName||'', a.action||'', a.entity||'', a.ref||'', a.at||0]);
+      }
+    }
+    
+    res.json({ success: true, message: 'Data synced to SQLite successfully' });
+  } catch (err) {
+    console.error('Sync error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Users

@@ -4,7 +4,7 @@ import type {
   DB, User, Company, Party, Product, StockDoc, Payment, Purchase, Expense,
   AuditAction, EntityName, Settings, Category,
 } from "./lib/db";
-import { loadDB, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel } from "./lib/db";
+import { loadDB, saveDB, resetDB, seedDB, uid, stockOf, SESSION_KEY, noLabel, loadFromServer, getSyncInfo } from "./lib/db";
 import { PrintSheet } from "./components/ui";
 
 /* ---------------- مسیریابی ---------------- */
@@ -42,6 +42,8 @@ interface AppCtx {
   nav: (r: Route, p?: Params) => void;
   login: (u: string, p: string) => string | null;
   logout: () => void;
+  serverConnected: boolean;
+  syncStatus: "idle" | "syncing" | "synced" | "error";
 
   toast: (msg: string, type?: Toast["type"]) => void;
   confirm: (msg: string) => Promise<boolean>;
@@ -91,8 +93,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [confirmBox, setConfirmBox] = useState<{ msg: string; resolve: (v: boolean) => void } | null>(null);
+  const [serverConnected, setServerConnected] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "error">("idle");
   const confirmRef = useRef(confirmBox);
   confirmRef.current = confirmBox;
+
+  // Sync با سرور هنگام لود اولیه
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setSyncStatus("syncing");
+      const serverDb = await loadFromServer();
+      if (cancelled) return;
+      if (serverDb) {
+        setServerConnected(true);
+        // اگه سرور داده جدیدتری داره، آپدیت کن
+        setDb((prev) => {
+          if (serverDb.seq.in >= prev.seq.in && serverDb.seq.out >= prev.seq.out) {
+            saveDB(serverDb);
+            return serverDb;
+          }
+          return prev;
+        });
+        setSyncStatus("synced");
+      } else {
+        setServerConnected(false);
+        setSyncStatus("error");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   /* چاپ */
   useEffect(() => {
@@ -415,6 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppCtx = {
     db, user, route, params, nav, login, logout,
+    serverConnected, syncStatus,
     toast, confirm, print: setPrintJob, printJob,
     saveCompany, saveUser, saveParty, deleteParty, saveCategory, deleteCategory,
     saveProduct, deleteProduct, saveStockDoc, deleteStockDoc,

@@ -1,9 +1,8 @@
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 
 // مسیر دیتابیس - در Liara از دیسک استفاده می‌شود
-// در Liara مسیر نسبی نسبت به ریشه پروژه (/app) است
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'db', 'anbarino.db');
 
 // اطمینان از وجود پوشه db
@@ -12,40 +11,124 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-let db;
+let db = null;
+let SQL = null;
+let initPromise = null;
 
-function getDb() {
-  if (!db) {
-    db = new Database(DB_PATH);
+// مقداردهی اولیه sql.js
+async function initEngine() {
+  if (initPromise) return initPromise;
+  
+  initPromise = (async () => {
+    SQL = await initSqlJs();
+    
+    // اگر فایل دیتابیس وجود دارد، آن را بارگذاری کن
+    if (fs.existsSync(DB_PATH)) {
+      const buffer = fs.readFileSync(DB_PATH);
+      db = new SQL.Database(buffer);
+      console.log('Database loaded from disk');
+    } else {
+      db = new SQL.Database();
+      console.log('New database created');
+    }
+    
     // تنظیمات بهینه‌سازی
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    db.run('PRAGMA journal_mode = WAL');
+    db.run('PRAGMA foreign_keys = ON');
+  })();
+  
+  return initPromise;
+}
+
+// ذخیره دیتابیس روی دیسک
+function saveToDisk() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
   }
-  return db;
 }
 
-// توابع سازگار با API قبلی (Promise-based)
-function run(sql, params = []) {
-  return Promise.resolve().then(() => {
-    const result = getDb().prepare(sql).run(...params);
-    return { lastID: result.lastInsertRowid, changes: result.changes };
+// تبدیل پارامترها به فرمت sql.js
+function normalizeParams(params) {
+  if (!params || params.length === 0) return [];
+  return params.map(p => {
+    if (p === null || p === undefined) return null;
+    if (typeof p === 'boolean') return p ? 1 : 0;
+    return p;
   });
 }
 
-function get(sql, params = []) {
-  return Promise.resolve().then(() => {
-    return getDb().prepare(sql).get(...params);
-  });
+// اجرای SQL (INSERT, UPDATE, DELETE)
+async function run(sql, params = []) {
+  await initEngine();
+  const normalizedParams = normalizeParams(params);
+  
+  if (normalizedParams.length > 0) {
+    db.run(sql, normalizedParams);
+  } else {
+    db.run(sql);
+  }
+  
+  // گرفتن lastID و changes
+  const lastIdResult = db.exec('SELECT last_insert_rowid() as id');
+  const changesResult = db.exec('SELECT changes() as c');
+  const lastID = lastIdResult.length > 0 ? lastIdResult[0].values[0][0] : 0;
+  const changes = changesResult.length > 0 ? changesResult[0].values[0][0] : 0;
+  
+  saveToDisk();
+  return { lastID, changes };
 }
 
-function all(sql, params = []) {
-  return Promise.resolve().then(() => {
-    return getDb().prepare(sql).all(...params);
-  });
+// گرفتن یک ردیف
+async function get(sql, params = []) {
+  await initEngine();
+  const normalizedParams = normalizeParams(params);
+  
+  let stmt;
+  if (normalizedParams.length > 0) {
+    stmt = db.prepare(sql);
+    stmt.bind(normalizedParams);
+  } else {
+    stmt = db.prepare(sql);
+  }
+  
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  
+  stmt.free();
+  return undefined;
+}
+
+// گرفتن همه ردیف‌ها
+async function all(sql, params = []) {
+  await initEngine();
+  const normalizedParams = normalizeParams(params);
+  
+  const results = [];
+  let stmt;
+  
+  if (normalizedParams.length > 0) {
+    stmt = db.prepare(sql);
+    stmt.bind(normalizedParams);
+  } else {
+    stmt = db.prepare(sql);
+  }
+  
+  while (stmt.step()) {
+    results.push(stmt.getAsObject());
+  }
+  
+  stmt.free();
+  return results;
 }
 
 // ساخت جداول
 async function initDatabase() {
+  await initEngine();
   console.log('Initializing database...');
 
   await run(`
